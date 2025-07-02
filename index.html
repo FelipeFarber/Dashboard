@@ -90,7 +90,7 @@
         }
         .section-title-container {
             display: flex;
-            justify-content: center; /* Centraliza o título */
+            justify-content: space-between;
             align-items: center;
             background-color: #457b9d;
             color: white;
@@ -152,6 +152,19 @@
         td:last-child {
             text-align: right;
             font-weight: 500;
+        }
+        .download-chart-btn {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            background-color: #fca311;
+            color: white;
+        }
+        .download-chart-btn:hover {
+            background-color: #e85d04;
         }
         .placeholder, .error {
             text-align: center;
@@ -368,7 +381,6 @@
                                 }
                                 itemData.quantities.push(quantity);
                                 itemData.values.push(value);
-                                // **CORREÇÃO:** Normaliza a chave antes de inserir no mapa
                                 const canonicalLabel = satisfactionLevels.find(l => l.toLowerCase() === label.toLowerCase());
                                 if(canonicalLabel) {
                                     itemData.valuesMap.set(canonicalLabel, value);
@@ -422,7 +434,12 @@
                 sectionTitle.className = 'section-title';
                 sectionTitle.textContent = sectionData.sectionTitle;
                 
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = 'Salvar Imagem';
+                downloadBtn.className = 'download-chart-btn';
+
                 titleContainer.appendChild(sectionTitle);
+                titleContainer.appendChild(downloadBtn);
                 sectionDiv.appendChild(titleContainer);
 
                 const sectionChartContainer = document.createElement('div');
@@ -433,6 +450,10 @@
                 const canvas = document.createElement('canvas');
                 sectionChartContainer.appendChild(canvas);
                 chartInstances[chartId] = createChart(canvas, sectionData.summary, `Resumo - ${sectionData.sectionTitle}`);
+                
+                downloadBtn.addEventListener('click', () => {
+                    downloadChart(canvas, `Resumo-${sectionData.sectionTitle.replace(/\s+/g, '-')}.png`);
+                });
                 
                 const itemsContainer = document.createElement('div');
                 itemsContainer.className = 'items-container';
@@ -486,6 +507,23 @@
                 row.insertCell().textContent = `${(values[i] || 0).toFixed(2)}%`.replace('.', ',');
             });
             return table;
+        }
+
+        function downloadChart(canvas, filename) {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+
+            tempCtx.fillStyle = '#FFFFFF';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(canvas, 0, 0);
+
+            const image = tempCanvas.toDataURL('image/png', 1.0);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = image;
+            link.click();
         }
 
         function createChart(canvasElement, data, titleText) {
