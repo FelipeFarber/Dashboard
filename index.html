@@ -37,7 +37,7 @@
             height: 50px;
             max-width: 150px;
         }
-        .controls-section, .upload-section {
+        .controls-section {
             background-color: #fff;
             padding: 2rem;
             border-radius: 12px;
@@ -90,7 +90,7 @@
         }
         .section-title-container {
             display: flex;
-            justify-content: space-between;
+            justify-content: center; /* Centraliza o título */
             align-items: center;
             background-color: #457b9d;
             color: white;
@@ -102,13 +102,24 @@
             font-size: 1.5rem;
             margin: 0;
         }
+        .chart-container {
+            margin-top: 1rem;
+            position: relative;
+            width: 100%;
+            max-width: 95%;
+            min-height: 450px; /* Altura aumentada para melhor visualização */
+            margin-left: auto;
+            margin-right: auto;
+        }
         .items-container {
             display: flex;
             flex-wrap: nowrap;
             overflow-x: auto;
             gap: 2rem;
             justify-content: flex-start;
-            padding-bottom: 1rem;
+            padding: 1.5rem 0;
+            border-top: 1px solid #eee;
+            margin-top: 2rem;
         }
         .item {
             display: flex;
@@ -141,29 +152,6 @@
         td:last-child {
             text-align: right;
             font-weight: 500;
-        }
-        .view-chart-btn {
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: background-color 0.2s;
-            background-color: #2a9d8f;
-            color: white;
-        }
-        .view-chart-btn:hover {
-            background-color: #264653;
-        }
-        .chart-container {
-            margin-top: 1rem;
-            position: relative;
-        }
-        .section-summary-chart {
-            max-width: 95%;
-            min-height: 400px;
-            margin-left: auto;
-            margin-right: auto;
         }
         .placeholder, .error {
             text-align: center;
@@ -208,7 +196,7 @@
         <img src="images/logo.png" alt="Logo da Empresa" onerror="this.style.display='none'">
     </header>
 
-    <section class="upload-section">
+    <section class="controls-section">
         <div class="control-group">
             <label for="file-input" id="file-input-label">Carregar Planilha Excel</label>
             <input type="file" id="file-input" accept=".xlsx, .xls">
@@ -326,7 +314,8 @@
 
             sectionLocations.forEach((section, i) => {
                 const currentSection = { sectionTitle: section.title, items: [], summary: { labels: [], datasets: [] } };
-                const itemLabels = [];
+                const itemLabelsForSummary = [];
+                const itemsForSummary = [];
 
                 const startRow = section.index;
                 const endRow = (i + 1 < sectionLocations.length) ? sectionLocations[i + 1].index : json.length;
@@ -346,14 +335,17 @@
                 itemTitlesRow.forEach((title, colIndex) => {
                     const trimmedTitle = String(title || "").trim();
                     if (trimmedTitle) {
-                        itemLabels.push(trimmedTitle);
+                        itemLabelsForSummary.push(trimmedTitle);
                         const itemData = {
                             itemTitle: trimmedTitle,
+                            valuesMap: new Map(),
                             labels: [],
                             quantities: [],
                             values: [],
                             hasQuantity: false
                         };
+                        
+                        satisfactionLevels.forEach(level => itemData.valuesMap.set(level, 0));
                         
                         const headerRow = json[itemTitleRowIndex + 1] || [];
                         itemData.hasQuantity = String(headerRow[colIndex + 1] || "").trim().toLowerCase() === 'quantidade';
@@ -376,33 +368,33 @@
                                 }
                                 itemData.quantities.push(quantity);
                                 itemData.values.push(value);
+                                // **CORREÇÃO:** Normaliza a chave antes de inserir no mapa
+                                const canonicalLabel = satisfactionLevels.find(l => l.toLowerCase() === label.toLowerCase());
+                                if(canonicalLabel) {
+                                    itemData.valuesMap.set(canonicalLabel, value);
+                                }
                             } else if (label.toLowerCase() === 'total') {
                                 break; 
                             }
                         }
                         
                         if (itemData.labels.length > 0) {
-                            currentSection.items.push(itemData);
+                            itemsForSummary.push(itemData);
                         }
                     }
                 });
 
-                // Prepara os dados para o gráfico de resumo da seção
-                currentSection.summary.labels = itemLabels;
+                currentSection.items = itemsForSummary;
+                currentSection.summary.labels = itemLabelsForSummary;
                 satisfactionLevels.forEach(level => {
                     const dataset = {
                         label: level,
-                        data: [],
+                        data: itemsForSummary.map(item => item.valuesMap.get(level) || 0)
                     };
-                    currentSection.items.forEach(item => {
-                        const index = item.labels.indexOf(level);
-                        dataset.data.push(index !== -1 ? item.values[index] : 0);
-                    });
                     currentSection.summary.datasets.push(dataset);
                 });
 
-
-                if (currentSection.items.length > 0) {
+                if (itemsForSummary.length > 0) {
                     sections.push(currentSection);
                 }
             });
@@ -430,30 +422,18 @@
                 sectionTitle.className = 'section-title';
                 sectionTitle.textContent = sectionData.sectionTitle;
                 
-                const viewSectionChartBtn = document.createElement('button');
-                viewSectionChartBtn.textContent = 'Gráfico da Seção';
-                viewSectionChartBtn.className = 'view-chart-btn';
-
                 titleContainer.appendChild(sectionTitle);
-                titleContainer.appendChild(viewSectionChartBtn);
                 sectionDiv.appendChild(titleContainer);
 
                 const sectionChartContainer = document.createElement('div');
                 sectionChartContainer.className = 'chart-container section-summary-chart';
                 sectionDiv.appendChild(sectionChartContainer);
                 
-                viewSectionChartBtn.addEventListener('click', () => {
-                    const chartId = `section-chart-${sectionIndex}`;
-                    sectionChartContainer.innerHTML = '';
-                    if (chartInstances[chartId]) chartInstances[chartId].destroy();
-                    
-                    const canvas = document.createElement('canvas');
-                    sectionChartContainer.appendChild(canvas);
-                    chartInstances[chartId] = createChart(canvas, sectionData.summary, 'sectionSummary', `Resumo - ${sectionData.sectionTitle}`);
-                    viewSectionChartBtn.style.display = 'none';
-                }, { once: true });
-
-
+                const chartId = `section-chart-${sectionIndex}`;
+                const canvas = document.createElement('canvas');
+                sectionChartContainer.appendChild(canvas);
+                chartInstances[chartId] = createChart(canvas, sectionData.summary, `Resumo - ${sectionData.sectionTitle}`);
+                
                 const itemsContainer = document.createElement('div');
                 itemsContainer.className = 'items-container';
                 sectionDiv.appendChild(itemsContainer);
@@ -508,7 +488,7 @@
             return table;
         }
 
-        function createChart(canvasElement, data, chartType = 'bar', titleText = 'Porcentagem (%)') {
+        function createChart(canvasElement, data, titleText) {
             const ctx = canvasElement.getContext('2d');
             const vibrantColors = [
                 'rgba(75, 192, 192, 0.8)', 'rgba(54, 162, 235, 0.8)', 'rgba(255, 206, 86, 0.8)',
@@ -517,40 +497,46 @@
 
             const config = {
                 type: 'bar',
-                data: {},
+                data: {
+                    labels: data.labels,
+                    datasets: data.datasets.map((ds, i) => ({
+                        ...ds,
+                        backgroundColor: vibrantColors[i % vibrantColors.length]
+                    }))
+                },
                 options: {
+                    indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { 
-                        legend: { display: chartType === 'sectionSummary' },
-                        title: { display: true, text: titleText },
+                        legend: { 
+                            position: 'top',
+                        },
+                        title: { 
+                            display: true, 
+                            text: titleText,
+                            font: { size: 16 }
+                        },
                         datalabels: {
                             color: '#fff',
                             textAlign: 'center',
                             font: {
                                 weight: 'bold'
                             },
-                            formatter: (value) => value > 4 ? value.toFixed(1) + '%' : ''
+                            formatter: (value) => value > 0 ? value.toFixed(1) + '%' : ''
                         }
                     },
-                    scales: {}
+                    scales: {
+                        x: { 
+                            stacked: true, 
+                            display: false,
+                        }, 
+                        y: { 
+                            stacked: true 
+                        }
+                    }
                 }
             };
-            
-            if (chartType === 'sectionSummary') {
-                config.options.indexAxis = 'y'; // Barras horizontais
-                config.options.scales = { 
-                    x: { stacked: true, max: 100, ticks: { callback: value => value + '%' } }, 
-                    y: { stacked: true }
-                };
-                config.data = {
-                    labels: data.labels,
-                    datasets: data.datasets.map((ds, i) => ({
-                        ...ds,
-                        backgroundColor: vibrantColors[i % vibrantColors.length]
-                    }))
-                };
-            }
             
             return new Chart(ctx, config);
         }
