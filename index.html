@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Análise de Satisfação</title>
+    
+    <!-- Biblioteca para criar os gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Biblioteca para ler arquivos Excel (.xlsx) no navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            padding: 1.5rem;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-align: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 1rem;
+        }
+        header h1 {
+            color: #1d3557;
+            margin: 0;
+        }
+        header img {
+            height: 50px;
+            max-width: 150px;
+        }
+        .controls-section, .upload-section {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .control-group {
+            display: inline-block;
+            margin: 0 1rem;
+            vertical-align: top;
+        }
+        #file-input-label {
+            background-color: #457b9d;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            display: inline-block;
+        }
+        #file-input-label:hover {
+            background-color: #1d3557;
+        }
+        #file-input {
+            display: none;
+        }
+        #file-name {
+            margin-top: 1rem;
+            color: #555;
+            font-style: italic;
+        }
+        #sheet-selector-container, #chart-type-container {
+            margin-top: 1.5rem;
+        }
+        #sheet-selector, #chart-type-selector {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            font-size: 1rem;
+        }
+        .dashboard-section {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        .section-title {
+            background-color: #457b9d;
+            color: white;
+            padding: 0.8rem 1.5rem;
+            margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            border-radius: 12px 12px 0 0;
+            font-size: 1.5rem;
+        }
+        .items-container {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 2rem;
+            justify-content: flex-start;
+            padding-bottom: 1rem;
+        }
+        .item {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: 100%;
+            max-width: 400px;
+            min-width: 350px;
+            flex-shrink: 0;
+        }
+        .item-title {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #1d3557;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        td:last-child {
+            text-align: right;
+            font-weight: 500;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .view-chart-btn {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+            background-color: #2a9d8f;
+            color: white;
+        }
+        .view-chart-btn:hover {
+            background-color: #264653;
+        }
+        .chart-container {
+            margin-top: 1rem;
+            position: relative;
+        }
+        .placeholder, .error {
+            text-align: center;
+            font-size: 1.2rem;
+            padding: 3rem;
+            color: #555;
+        }
+        /* Estilos do Loader */
+        .loader-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #457b9d;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader-overlay" style="display: none;">
+        <div class="loader"></div>
+    </div>
+
+    <header>
+        <h1>Dashboard de Análise de Satisfação</h1>
+        <img src="images/logo.png" alt="Logo da Empresa" onerror="this.style.display='none'">
+    </header>
+
+    <section class="upload-section">
+        <div class="control-group">
+            <label for="file-input" id="file-input-label">Carregar Planilha Excel</label>
+            <input type="file" id="file-input" accept=".xlsx, .xls">
+            <p id="file-name"></p>
+        </div>
+        <div class="control-group" id="sheet-selector-container" style="display: none;">
+            <label for="sheet-selector"><strong>Selecione a Planilha:</strong></label>
+            <select id="sheet-selector"></select>
+        </div>
+        <div class="control-group" id="chart-type-container" style="display: none;">
+            <label for="chart-type-selector"><strong>Formato do Gráfico:</strong></label>
+            <select id="chart-type-selector">
+                <option value="bar">Barras</option>
+                <option value="pie">Pizza</option>
+                <option value="doughnut">Rosca</option>
+                <option value="line">Linha</option>
+            </select>
+        </div>
+    </section>
+
+    <main id="dashboard-container">
+        <div class="placeholder">Aguardando o carregamento da planilha...</div>
+    </main>
+
+    <script>
+        let currentWorkbook = null;
+        let overallChartInstance = null;
+
+        document.getElementById('file-input').addEventListener('change', handleFile);
+        document.getElementById('sheet-selector').addEventListener('change', renderSelectedSheet);
+        document.getElementById('chart-type-selector').addEventListener('change', renderSelectedSheet);
+
+        function showLoader(show) {
+            document.getElementById('loader-overlay').style.display = show ? 'flex' : 'none';
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showLoader(true);
+            document.getElementById('file-name').textContent = `Arquivo selecionado: ${file.name}`;
+            document.getElementById('dashboard-container').innerHTML = `<div class="placeholder">Processando arquivo...</div>`;
+
+            // Usamos um timeout para garantir que o loader apareça antes do processamento pesado
+            setTimeout(() => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = e.target.result;
+                        currentWorkbook = XLSX.read(data, { type: 'binary' });
+
+                        const sheetSelectorContainer = document.getElementById('sheet-selector-container');
+                        const chartTypeContainer = document.getElementById('chart-type-container');
+                        const sheetSelector = document.getElementById('sheet-selector');
+                        
+                        sheetSelector.innerHTML = ''; 
+
+                        currentWorkbook.SheetNames.forEach(sheetName => {
+                            const option = document.createElement('option');
+                            option.value = sheetName;
+                            option.textContent = sheetName;
+                            sheetSelector.appendChild(option);
+                        });
+
+                        sheetSelectorContainer.style.display = 'inline-block';
+                        chartTypeContainer.style.display = 'inline-block';
+                        renderSelectedSheet(); 
+
+                    } catch (error) {
+                        console.error("Erro ao processar o arquivo:", error);
+                        document.getElementById('dashboard-container').innerHTML = `<div class="error"><strong>Erro:</strong> Não foi possível ler o arquivo. Verifique se o formato da planilha está correto.</div>`;
+                        showLoader(false);
+                    }
+                };
+                reader.readAsBinaryString(file);
+            }, 50);
+        }
+
+        function renderSelectedSheet() {
+            if (!currentWorkbook) return;
+            showLoader(true);
+
+            setTimeout(() => {
+                const sheetSelector = document.getElementById('sheet-selector');
+                const selectedSheetName = sheetSelector.value;
+                const worksheet = currentWorkbook.Sheets[selectedSheetName];
+
+                const { sections, overall } = processarDadosDaPlanilha(worksheet);
+                buildDashboard(sections, overall);
+                showLoader(false);
+            }, 50);
+        }
+
+        function processarDadosDaPlanilha(worksheet) {
+            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            const sections = [];
+            const overall = { labels: [], quantities: [], values: [], hasQuantity: false };
+            const overallMap = new Map();
+
+            const sectionKeywords = [
+                "Recepção", "Atendimento Médico", "Serviços de Enfermagem", 
+                "Serviços Complementares", "Instalações e Conveniências", "Serviços de Telefonia", "Informações Finais",
+                "Farmácia", "Laboratório", "Raio-X", "Imagem", 
+                "Administrativo", "Financeiro", "Limpeza", "Manutenção"
+            ];
+
+            const converterPorcentagem = (valor) => {
+                if (typeof valor === 'string') {
+                    const num = parseFloat(valor.replace('%', '').replace(',', '.'));
+                    return isNaN(num) ? 0 : num;
+                }
+                if (typeof valor === 'number') {
+                    return valor < 1 && valor > 0 ? valor * 100 : valor;
+                }
+                return 0;
+            };
+
+            const sectionLocations = [];
+            json.forEach((row, rowIndex) => {
+                const firstCell = String(row[0] || "").trim();
+                if (sectionKeywords.includes(firstCell)) {
+                    sectionLocations.push({ title: firstCell, index: rowIndex });
+                }
+            });
+
+            sectionLocations.forEach((section, i) => {
+                const currentSection = { sectionTitle: section.title, items: [] };
+                const startRow = section.index;
+                const endRow = (i + 1 < sectionLocations.length) ? sectionLocations[i + 1].index : json.length;
+
+                let itemTitleRowIndex = -1;
+                for (let r = startRow + 1; r < endRow; r++) {
+                    if (json[r] && json[r].some(cell => String(cell || "").trim() !== "") && !json[r].some(cell => String(cell || "").trim() === "Nível de Satisfação")) {
+                        itemTitleRowIndex = r;
+                        break;
+                    }
+                }
+
+                if (itemTitleRowIndex === -1) return;
+
+                const itemTitlesRow = json[itemTitleRowIndex];
+                
+                itemTitlesRow.forEach((title, colIndex) => {
+                    const trimmedTitle = String(title || "").trim();
+                    if (trimmedTitle) {
+                        const labels = [];
+                        const quantities = [];
+                        const values = [];
+                        
+                        const headerRow = json[itemTitleRowIndex + 1] || [];
+                        const hasQuantityColumn = String(headerRow[colIndex + 1] || "").trim().toLowerCase() === 'quantidade';
+
+                        for (let dataRowIndex = itemTitleRowIndex + 2; dataRowIndex < endRow; dataRowIndex++) {
+                            const rowData = json[dataRowIndex];
+                            if (!rowData) continue; 
+
+                            const label = String(rowData[colIndex] || "").trim();
+                            if (label && label.toLowerCase() !== 'total') {
+                                labels.push(label);
+                                let quantity = 'N/A';
+                                let value = 0;
+
+                                if (hasQuantityColumn) {
+                                    quantity = rowData[colIndex + 1] || 0;
+                                    value = converterPorcentagem(rowData[colIndex + 2]);
+                                } else {
+                                    value = converterPorcentagem(rowData[colIndex + 1]);
+                                }
+                                quantities.push(quantity);
+                                values.push(value);
+
+                                if (!overallMap.has(label)) {
+                                    overallMap.set(label, { quantity: 0, count: 0 });
+                                }
+                                if (hasQuantityColumn) {
+                                    overallMap.get(label).quantity += Number(quantity);
+                                    overall.hasQuantity = true;
+                                }
+                            } else if (label.toLowerCase() === 'total') {
+                                break; 
+                            }
+                        }
+                        
+                        if (labels.length > 0) {
+                            currentSection.items.push({
+                                itemTitle: trimmedTitle,
+                                labels: labels,
+                                quantities: quantities,
+                                values: values,
+                                hasQuantity: hasQuantityColumn
+                            });
+                        }
+                    }
+                });
+
+                if (currentSection.items.length > 0) {
+                    sections.push(currentSection);
+                }
+            });
+            
+            let totalQuantity = 0;
+            overallMap.forEach(value => totalQuantity += value.quantity);
+
+            overallMap.forEach((value, key) => {
+                overall.labels.push(key);
+                overall.quantities.push(value.quantity);
+                overall.values.push(totalQuantity > 0 ? (value.quantity / totalQuantity) * 100 : 0);
+            });
+
+
+            return { sections, overall };
+        }
+
+        function buildDashboard(sections, overall) {
+            const dashboardContainer = document.getElementById('dashboard-container');
+            dashboardContainer.innerHTML = ''; 
+
+            if (sections.length === 0) {
+                dashboardContainer.innerHTML = `<div class="error">Nenhuma seção reconhecida foi encontrada na planilha selecionada. Verifique se os títulos das seções (ex: "Recepção") estão na primeira coluna.</div>`;
+                return;
+            }
+            
+            if(overall && overall.labels.length > 0) {
+                const overallSectionDiv = document.createElement('div');
+                overallSectionDiv.className = 'dashboard-section';
+                const sectionTitle = document.createElement('h2');
+                sectionTitle.className = 'section-title';
+                sectionTitle.textContent = 'Gráfico Geral da Planilha';
+                overallSectionDiv.appendChild(sectionTitle);
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                itemDiv.style.margin = '0 auto';
+
+                const chartContainer = document.createElement('div');
+                chartContainer.className = 'chart-container';
+                
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'button-container';
+
+                const viewChartBtn = document.createElement('button');
+                viewChartBtn.textContent = 'Visualizar Gráfico Geral';
+                viewChartBtn.className = 'view-chart-btn';
+
+                viewChartBtn.addEventListener('click', () => {
+                    chartContainer.innerHTML = '';
+                    if (overallChartInstance) {
+                        overallChartInstance.destroy();
+                    }
+                    const canvas = document.createElement('canvas');
+                    chartContainer.appendChild(canvas);
+                    const chartType = document.getElementById('chart-type-selector').value;
+                    overallChartInstance = createChart(canvas, overall.labels, overall.values, chartType, 'Gráfico Geral');
+                    viewChartBtn.style.display = 'none';
+                }, { once: true }); // O evento só dispara uma vez
+
+                buttonContainer.appendChild(viewChartBtn);
+                itemDiv.appendChild(buttonContainer);
+                itemDiv.appendChild(chartContainer);
+                overallSectionDiv.appendChild(itemDiv);
+                dashboardContainer.appendChild(overallSectionDiv);
+            }
+
+
+            sections.forEach(sectionData => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'dashboard-section';
+                dashboardContainer.appendChild(sectionDiv);
+                
+                const sectionTitle = document.createElement('h2');
+                sectionTitle.className = 'section-title';
+                sectionTitle.textContent = sectionData.sectionTitle;
+                sectionDiv.appendChild(sectionTitle);
+
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = 'items-container';
+                sectionDiv.appendChild(itemsContainer);
+
+                if (sectionData.items.length === 0) {
+                    itemsContainer.innerHTML = `<div class="placeholder">Nenhum dado encontrado para esta seção.</div>`;
+                }
+
+                sectionData.items.forEach((itemData) => {
+                    if (!itemData || !itemData.itemTitle || itemData.labels.length === 0) return; 
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'item';
+                    itemsContainer.appendChild(itemDiv);
+
+                    const itemTitle = document.createElement('h3');
+                    itemTitle.className = 'item-title';
+                    itemTitle.textContent = itemData.itemTitle;
+                    itemDiv.appendChild(itemTitle);
+
+                    const table = createTable(itemData.labels, itemData.quantities, itemData.values, itemData.hasQuantity);
+                    itemDiv.appendChild(table);
+
+                    const chartContainer = document.createElement('div');
+                    chartContainer.className = 'chart-container';
+                    
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.className = 'button-container';
+
+                    const viewChartBtn = document.createElement('button');
+                    viewChartBtn.textContent = 'Visualizar Gráfico';
+                    viewChartBtn.className = 'view-chart-btn';
+                    
+                    viewChartBtn.addEventListener('click', () => {
+                        chartContainer.innerHTML = ''; 
+                        const canvas = document.createElement('canvas');
+                        chartContainer.appendChild(canvas);
+                        const chartType = document.getElementById('chart-type-selector').value;
+                        createChart(canvas, itemData.labels, itemData.values, chartType);
+                        viewChartBtn.style.display = 'none'; 
+                    }, { once: true });
+
+                    buttonContainer.appendChild(viewChartBtn);
+                    itemDiv.appendChild(buttonContainer);
+                    itemDiv.appendChild(chartContainer);
+                });
+            });
+        }
+
+        function createTable(labels, quantities, values, hasQuantityData) {
+            const table = document.createElement('table');
+            const thead = table.createTHead();
+            const tbody = table.createTBody();
+            const headerRow = thead.insertRow();
+            
+            const headers = hasQuantityData 
+                ? ['Nível de Satisfação', 'Quantidade', 'Porcentagem (%)']
+                : ['Nível de Satisfação', 'Porcentagem (%)'];
+
+            headers.forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+
+            labels.forEach((label, i) => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = label;
+                if (hasQuantityData) {
+                    row.insertCell().textContent = quantities[i];
+                }
+                row.insertCell().textContent = `${(values[i] || 0).toFixed(2)}%`.replace('.', ',');
+            });
+            return table;
+        }
+
+        function createChart(canvasElement, labels, values, chartType = 'bar', titleText = 'Porcentagem (%)') {
+            const ctx = canvasElement.getContext('2d');
+            const options = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { 
+                        display: chartType === 'pie' || chartType === 'doughnut'
+                    },
+                    title: {
+                        display: true,
+                        text: titleText
+                    }
+                },
+                scales: {}
+            };
+
+            if(chartType === 'bar') {
+                options.indexAxis = 'y';
+                options.scales = {
+                    x: { beginAtZero: true, ticks: { callback: value => value + '%' } }
+                }
+            }
+            if(chartType === 'line') {
+                options.scales = {
+                    y: { beginAtZero: true, ticks: { callback: value => value + '%' } }
+                }
+            }
+            
+            // Nova paleta de cores mais chamativas
+            const vibrantColors = [
+                'rgba(255, 99, 132, 0.8)',
+                'rgba(54, 162, 235, 0.8)',
+                'rgba(255, 206, 86, 0.8)',
+                'rgba(75, 192, 192, 0.8)',
+                'rgba(153, 102, 255, 0.8)',
+                'rgba(255, 159, 64, 0.8)'
+            ];
+
+            return new Chart(ctx, {
+                type: chartType,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Porcentagem (%)',
+                        data: values,
+                        backgroundColor: vibrantColors,
+                        borderColor: '#fff',
+                        borderWidth: 1
+                    }]
+                },
+                options: options
+            });
+        }
+    </script>
+
+</body>
+</html>
